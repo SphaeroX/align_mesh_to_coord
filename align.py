@@ -2,6 +2,9 @@ import numpy as np
 import pyvista as pv
 from scipy.spatial.transform import Rotation as R
 from sklearn.decomposition import PCA
+import tkinter as tk
+from tkinter import filedialog
+
 
 # Globale Variablen
 picked_points = []
@@ -159,8 +162,23 @@ def after_render():
     # plotter.add_camera_orientation_widget()
 
 
+def select_mesh_file():
+    root = tk.Tk()
+    root.withdraw()  # Verstecke das Tkinter-Hauptfenster
+    file_path = filedialog.askopenfilename(
+        title="Wählen Sie die Mesh-Datei",
+        filetypes=[("PLY files", "*.ply"), ("All files", "*.*")])
+    return file_path
+
+
 # Laden des Meshes aus der Datei
-filename = 'input_mesh.ply'
+filename = select_mesh_file()
+if filename:  # Prüfe, ob der Benutzer eine Datei ausgewählt hat
+    mesh = pv.read(filename)
+else:
+    print("Keine Datei ausgewählt. Programm wird beendet.")
+    exit()
+
 mesh = pv.read(filename)
 
 # Einrichten des Plotters

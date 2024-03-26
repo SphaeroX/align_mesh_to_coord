@@ -26,4 +26,4 @@ pip install numpy pyvista scipy scikit-learn
 
 Here's a screenshot to help you visualize the process:
 
-![Screenshot](screenshot.png)
+![Preview](preview.gif)

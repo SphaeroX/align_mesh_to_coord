@@ -14,9 +14,8 @@ current_axis_selection = 'first'  # 'first' oder 'second'
 # Speichert die bestätigten Achsen
 axes_confirmed = {'first': None, 'second': None}
 
+
 # Funktionen Definitionen
-
-
 def draw_plane(plotter, points, plane_name='plane', color='yellow'):
     if len(points) < 3:
         return  # Nicht genug Punkte für eine Ebene
@@ -117,25 +116,41 @@ def on_pick(event):
     global picked_points, mesh_transformed, plane_points, current_axis_selection
     point = np.array([event[0], event[1], event[2]])
 
+    # Prüfe, ob der Punkt bereits ausgewählt wurde, und entferne ihn in diesem Fall
+    # oder füge ihn hinzu, wenn er noch nicht ausgewählt wurde
     if any(np.array_equal(point, p) for p in picked_points):
         picked_points = [
             p for p in picked_points if not np.array_equal(point, p)]
+        if point.tolist() in plane_points[current_axis_selection]:
+            plane_points[current_axis_selection].remove(point.tolist())
     else:
         picked_points.append(point)
         # Speichere den Punkt basierend auf der aktuellen Achsenauswahl
-        plane_points[current_axis_selection].append(point)
+        plane_points[current_axis_selection].append(point.tolist())
 
+    # Lösche die aktuelle Darstellung, um sie mit den aktualisierten Informationen neu zu zeichnen
     plotter.clear()
+
+    # Füge das transformierte oder das ursprüngliche Mesh hinzu, abhängig vom Zustand
     if mesh_transformed is not None:
         add_mesh(mesh_transformed)
     else:
         add_mesh(mesh)
+
+    # Zeichne die Ebenen für die erste und zweite Achsenauswahl
     if plane_points['first']:
         draw_plane(plotter, np.array(
             plane_points['first']), 'first_plane', 'yellow')
     if plane_points['second']:
         draw_plane(plotter, np.array(
             plane_points['second']), 'second_plane', 'green')
+
+    # Zeige die ausgewählten Punkte in Rot
+    if picked_points:
+        plotter.add_mesh(pv.PolyData(np.array(picked_points)),
+                         color="red", point_size=10, render_points_as_spheres=True)
+
+    # Führe erforderliche Aktualisierungen der Darstellung durch
     plotter.render()
     after_render()
 

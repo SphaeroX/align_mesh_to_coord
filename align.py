@@ -1,3 +1,4 @@
+# Notwendige Bibliotheken
 import numpy as np
 import pyvista as pv
 from scipy.spatial.transform import Rotation as R
@@ -5,14 +6,18 @@ from sklearn.decomposition import PCA
 import tkinter as tk
 from tkinter import filedialog
 
-
 # Globale Variablen
 picked_points = []
 mesh_transformed = None
-
+plane_points = {'first': [], 'second': []}
+current_axis_selection = 'first'  # 'first' oder 'second'
+# Speichert die bestätigten Achsen
+axes_confirmed = {'first': None, 'second': None}
 
 # Funktionen Definitionen
-def draw_plane(plotter, points):
+
+
+def draw_plane(plotter, points, plane_name='plane', color='yellow'):
     if len(points) < 3:
         return  # Nicht genug Punkte für eine Ebene
 
@@ -33,174 +38,206 @@ def draw_plane(plotter, points):
     plane_mesh = pv.PolyData(corners_3d)
     plane_mesh = plane_mesh.delaunay_2d()
 
-    plotter.add_mesh(plane_mesh, color='yellow', opacity=0.6,
-                     name='plane', pickable=False)
+    plotter.add_mesh(plane_mesh, color=color, opacity=0.6,
+                     name=plane_name, pickable=False)
 
 
-def align_and_transform(plotter, target_axis):
-    global picked_points, mesh_transformed
-    if len(picked_points) < 3:
-        print("Nicht genügend Punkte für die Transformation.")
+def align_and_transform(plotter):
+    global mesh_transformed, plane_points, axes_confirmed, mesh
+
+    if not all(axes_confirmed.values()):
+        print("Nicht alle Achsen wurden bestätigt.")
         return
 
-    current_mesh = mesh_transformed if mesh_transformed is not None else mesh
+    # Berechne die Hauptnormalen für beide ausgewählte Punktmengen
+    normals = {}
+    centers = {}
+    for key, points in plane_points.items():
+        if len(points) >= 3:
+            pca = PCA(n_components=3).fit(points)
+            # Die letzte Komponente ist die Normale
+            normals[key] = pca.components_[-1]
+            centers[key] = np.mean(points, axis=0)
+        else:
+            print(f"Nicht genügend Punkte für die Ebene {key}.")
+            return
 
-    # Schwerpunkt und Normale der ausgewählten Punkte berechnen
-    center_of_mass = np.mean(picked_points, axis=0)
-    pca = PCA(n_components=3)
-    pca.fit(picked_points)
-    normal = pca.components_[2]  # Die Normale der Ebene
+    # Bestimme die Zielnormalen basierend auf den ausgewählten Achsen
+    axis_vectors = {'x': np.array([1, 0, 0]), 'y': np.array(
+        [0, 1, 0]), 'z': np.array([0, 0, 1])}
+    target_normals = {key: axis_vectors[axis]
+                      for key, axis in axes_confirmed.items()}
 
-    # Zielnormalen definieren
-    target_normal = {
-        'x': np.array([1, 0, 0]),
-        'y': np.array([0, 1, 0]),
-        'z': np.array([0, 0, 1])
-    }[target_axis]
+    # Berechne die Rotation von der ersten Normalen zur ersten Zielnormalen
+    rotation1 = R.align_vectors(
+        [target_normals['first']], [normals['first']])[0]
 
-    # Rotation bestimmen, um die aktuelle auf die Zielnormale abzubilden
-    rotation = R.align_vectors([target_normal], [normal])[0]
-    rotation_matrix = rotation.as_matrix()
+    # Wende die erste Rotation an und berechne die neue Normale der zweiten Ebene
+    rotated_second_points = rotation1.apply(
+        plane_points['second'] - centers['first']) + centers['first']
+    pca_second_rotated = PCA(n_components=3).fit(rotated_second_points)
+    normal_second_rotated = pca_second_rotated.components_[-1]
 
-    # Transformation des Meshes
-    mesh_centered = current_mesh.points - center_of_mass
-    points_transformed = np.dot(
-        rotation_matrix, mesh_centered.T).T + center_of_mass
-    mesh_transformed = current_mesh.copy()
-    mesh_transformed.points = points_transformed
+    # Berechne die zweite Rotation innerhalb der durch die erste Rotation definierten Ebene
+    rotation2 = R.align_vectors([target_normals['second']], [
+                                normal_second_rotated])[0]
+
+    # Kombiniere beide Rotationen
+    combined_rotation = rotation2 * rotation1
+
+    # Wende die kombinierte Rotation auf das Mesh an
+    if mesh_transformed is None:
+        mesh_transformed = mesh.copy()
+
+    mesh_transformed.points = combined_rotation.apply(
+        mesh_transformed.points - centers['first']) + centers['first']
 
     # Aktualisiere die Anzeige
-    picked_points = []
+    # Zurücksetzen der Punkte für die nächste Auswahl
+    plane_points = {'first': [], 'second': []}
+    # Zurücksetzen der Achsenbestätigung
+    axes_confirmed = {'first': None, 'second': None}
     plotter.clear()
     add_mesh(mesh_transformed)
     plotter.render()
     after_render()
-    print(f"Alignment auf die {target_axis.upper()}-Achse durchgeführt.")
+    print("Mesh erfolgreich ausgerichtet.")
 
 
 def save_transformed():
     global mesh_transformed
     if mesh_transformed is not None:
         mesh_transformed.save('transformed_mesh.stl')
-        # Extrahiere die Punktwolke aus dem Mesh und speichere sie
         print("Transformed mesh saved.")
     else:
         print("Kein transformiertes Mesh zum Speichern vorhanden.")
 
 
 def on_pick(event):
-    # Zugriff auf die globale Variable `mesh_transformed`
-    global picked_points, mesh_transformed
+    global picked_points, mesh_transformed, plane_points, current_axis_selection
     point = np.array([event[0], event[1], event[2]])
 
-    # Prüfe, ob der Punkt bereits in der Liste ist
     if any(np.array_equal(point, p) for p in picked_points):
-        # Wenn der Punkt gefunden wird, entferne ihn
         picked_points = [
             p for p in picked_points if not np.array_equal(point, p)]
     else:
-        # Wenn der Punkt nicht gefunden wird, füge ihn hinzu
         picked_points.append(point)
+        # Speichere den Punkt basierend auf der aktuellen Achsenauswahl
+        plane_points[current_axis_selection].append(point)
 
-    plotter.clear()  # Lösche die aktuelle Darstellung
-    # Prüfe, ob eine Transformation durchgeführt wurde und füge das entsprechende Mesh hinzu
+    plotter.clear()
     if mesh_transformed is not None:
-        # Zeige das transformierte Mesh
         add_mesh(mesh_transformed)
     else:
-        # Zeige das ursprüngliche Mesh, falls keine Transformation stattgefunden hat
         add_mesh(mesh)
-    if picked_points:
-        # Zeige ausgewählte Punkte, falls vorhanden
-        plotter.add_mesh(pv.PolyData(np.array(picked_points)),
-                         color="red", point_size=10)
-    # Zeichne die Ebene basierend auf den ausgewählten Punkten
-    draw_plane(plotter, np.array(picked_points))
+    if plane_points['first']:
+        draw_plane(plotter, np.array(
+            plane_points['first']), 'first_plane', 'yellow')
+    if plane_points['second']:
+        draw_plane(plotter, np.array(
+            plane_points['second']), 'second_plane', 'green')
     plotter.render()
     after_render()
+
+
+def confirm_axis_selection(plotter, axis):
+    global axes_confirmed, current_axis_selection
+    if current_axis_selection == 'first':
+        axes_confirmed['first'] = axis
+        current_axis_selection = 'second'  # Wechsle zur Auswahl der zweiten Achse
+    elif current_axis_selection == 'second' and axes_confirmed['first'] != axis:
+        axes_confirmed['second'] = axis
+    else:
+        print("Bitte wählen Sie eine andere Achse als die erste.")
+        return
+
+    print(f"Achse {axis.upper()} für {current_axis_selection} bestätigt.")
+
+    # Nach der Bestätigung der zweiten Achse führe die Ausrichtung durch
+    if all(axes_confirmed.values()):
+        align_and_transform(plotter)
 
 
 def reset_selection(plotter):
-    global picked_points
+    global picked_points, plane_points, axes_confirmed, current_axis_selection
     picked_points = []
+    plane_points = {'first': [], 'second': []}
+    axes_confirmed = {'first': None, 'second': None}
+    current_axis_selection = 'first'
     plotter.clear()
     add_mesh(mesh)
-
     plotter.render()
     after_render()
-    print("Selektionen zurückgesetzt und Ebene entfernt.")
+    print("Auswahl zurückgesetzt.")
 
 
 def remove_last_picked_point(plotter):
+    global picked_points, plane_points, current_axis_selection
     if picked_points:
         removed_point = picked_points.pop()
-        print(f"Last picked point removed: {removed_point}")
+        if removed_point in plane_points[current_axis_selection]:
+            plane_points[current_axis_selection].remove(removed_point)
+        print(f"Letzter ausgewählter Punkt entfernt: {removed_point}")
         plotter.clear()
         add_mesh(mesh)
-        draw_plane(plotter, np.array(picked_points))
-        plotter.add_mesh(pv.PolyData(np.array(picked_points)),
-                         color="red", point_size=10)
+        if plane_points['first']:
+            draw_plane(plotter, np.array(
+                plane_points['first']), 'first_plane', 'yellow')
+        if plane_points['second']:
+            draw_plane(plotter, np.array(
+                plane_points['second']), 'second_plane', 'green')
         plotter.render()
         after_render()
     else:
-        print("No points to remove.")
+        print("Keine Punkte zum Entfernen.")
 
 
 def add_mesh(newMesh):
-    plotter.add_mesh(newMesh, pickable=True,
-                     show_edges=True)
+    plotter.add_mesh(newMesh, pickable=True, show_edges=True)
 
 
 def after_render():
+    # Zeigt Hinweise zur Steuerung an
     plotter.add_text(
-        'x/y/z = align plane to this axis\nb: remove the last clicked\nr = reset all points\ns = save\n',
+        'x/y/z: Confirm axis for current selection\nr: Reset\nb: Remove last picked point\ns: Save Mesh',
         position='lower_right',
         color='black',
         shadow=True,
         font_size=8,
     )
-    # plotter.add_camera_orientation_widget()
 
 
 def select_mesh_file():
     root = tk.Tk()
     root.withdraw()  # Verstecke das Tkinter-Hauptfenster
     file_path = filedialog.askopenfilename(
-        title="Wählen Sie die Mesh-Datei",
+        title="Choose your mesh as .ply file",
         filetypes=[("PLY files", "*.ply"), ("All files", "*.*")])
     return file_path
 
 
-# Laden des Meshes aus der Datei
+# Auswahl der Mesh-Datei
 filename = select_mesh_file()
-if filename:  # Prüfe, ob der Benutzer eine Datei ausgewählt hat
+if filename:
     mesh = pv.read(filename)
 else:
-    print("Keine Datei ausgewählt. Programm wird beendet.")
+    print("No file selected. The program will terminate.")
     exit()
-
-mesh = pv.read(filename)
 
 # Einrichten des Plotters
 plotter = pv.Plotter()
 plotter.show_axes()
 add_mesh(mesh)
-
-# plotter.show_bounds(  grid='front',  location='outer', all_edges=True)
 plotter.enable_point_picking(callback=on_pick, picker='volume')
 
-# Tastenkürzel für die Transformation auf die x-, y- und z-Achse
-plotter.add_key_event('x', lambda: align_and_transform(plotter, 'x'))
-plotter.add_key_event('y', lambda: align_and_transform(plotter, 'y'))
-plotter.add_key_event('z', lambda: align_and_transform(plotter, 'z'))
+# Tastenkürzel für die Bestätigung der Achsen
+plotter.add_key_event('x', lambda: confirm_axis_selection(plotter, 'x'))
+plotter.add_key_event('y', lambda: confirm_axis_selection(plotter, 'y'))
+plotter.add_key_event('z', lambda: confirm_axis_selection(plotter, 'z'))
 
-# Tastenkürzel zum Speichern der transformierten Punktwolke
+# Tastenkürzel für andere Funktionen
 plotter.add_key_event('s', save_transformed)
-
-# Tastenkürzel zum Zurücksetzen aller Selektionen und Löschen der Ebene
 plotter.add_key_event('r', lambda: reset_selection(plotter))
-
-# Tastenkürzel zum Entfernen des zuletzt ausgewählten Punktes
 plotter.add_key_event('b', lambda: remove_last_picked_point(plotter))
 
 # Starte die Visualisierung

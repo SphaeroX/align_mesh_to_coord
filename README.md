@@ -14,13 +14,17 @@ pip install numpy pyvista scipy scikit-learn
 
 ## Usage Instructions
 
-1. Rename your mesh file to `input_mesh.ply`.
+1. Select your mesh file as a .ply file. This will be the input mesh you wish to align.
 
-2. Execute the script. Begin by selecting points on the mesh to define the alignment plane. You need to pick at least three points for accurate alignment.
+2. Choose at least three points on the mesh to define a plane. You can add as many points as you like for more accurate alignment.
 
-3. Use the keys `x`, `y`, or `z` to align the selected plane with the corresponding axis of the world coordinate system.
+3. Confirm the alignment of the selected plane to one of the world coordinate system axes by pressing `x`, `y`, or `z`.
 
-4. Press the 's' key to save the aligned mesh as `transformed_mesh.stl`.
+4. Select points again for the second axis. Make sure to confirm the selection with `x`, `y`, or `z`, ensuring that this axis is different from the first one chosen.
+
+5. Once the second axis is selected and confirmed, the mesh will be aligned according to these two axes.
+
+6. Press the `s` key to save the aligned mesh. It will be saved as `transformed_mesh.stl` in the same folder.
 
 ## Screenshot
 

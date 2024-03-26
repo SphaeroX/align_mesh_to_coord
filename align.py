@@ -7,13 +7,8 @@ from sklearn.decomposition import PCA
 picked_points = []
 mesh_transformed = None
 
-# Laden des Meshes aus der Datei
-filename = 'input_mesh.ply'
-mesh = pv.read(filename)
 
 # Funktionen Definitionen
-
-
 def draw_plane(plotter, points):
     if len(points) < 3:
         return  # Nicht genug Punkte für eine Ebene
@@ -74,7 +69,7 @@ def align_and_transform(plotter, target_axis):
     # Aktualisiere die Anzeige
     picked_points = []
     plotter.clear()
-    plotter.add_mesh(mesh_transformed, pickable=True)
+    add_mesh(mesh_transformed)
     plotter.render()
     after_render()
     print(f"Alignment auf die {target_axis.upper()}-Achse durchgeführt.")
@@ -94,25 +89,24 @@ def on_pick(event):
     # Zugriff auf die globale Variable `mesh_transformed`
     global picked_points, mesh_transformed
     point = np.array([event[0], event[1], event[2]])
-    threshold = 0.001  # Distanzschwelle für die Punktauswahl
 
-    # Näheprüfung zu bereits ausgewählten Punkten
-    for i, p in enumerate(picked_points):
-        if np.linalg.norm(point - p) < threshold:
-            picked_points.pop(i)  # Entferne den Punkt, wenn er nahe genug ist
-            break
+    # Prüfe, ob der Punkt bereits in der Liste ist
+    if any(np.array_equal(point, p) for p in picked_points):
+        # Wenn der Punkt gefunden wird, entferne ihn
+        picked_points = [
+            p for p in picked_points if not np.array_equal(point, p)]
     else:
-        # Füge den Punkt hinzu, wenn er nicht zu nahe ist
+        # Wenn der Punkt nicht gefunden wird, füge ihn hinzu
         picked_points.append(point)
 
     plotter.clear()  # Lösche die aktuelle Darstellung
     # Prüfe, ob eine Transformation durchgeführt wurde und füge das entsprechende Mesh hinzu
     if mesh_transformed is not None:
         # Zeige das transformierte Mesh
-        plotter.add_mesh(mesh_transformed, pickable=True)
+        add_mesh(mesh_transformed)
     else:
         # Zeige das ursprüngliche Mesh, falls keine Transformation stattgefunden hat
-        plotter.add_mesh(mesh, pickable=True)
+        add_mesh(mesh)
     if picked_points:
         # Zeige ausgewählte Punkte, falls vorhanden
         plotter.add_mesh(pv.PolyData(np.array(picked_points)),
@@ -126,7 +120,9 @@ def on_pick(event):
 def reset_selection(plotter):
     global picked_points
     picked_points = []
-    plotter.remove_actor('plane')
+    plotter.clear()
+    add_mesh(mesh)
+
     plotter.render()
     after_render()
     print("Selektionen zurückgesetzt und Ebene entfernt.")
@@ -137,7 +133,7 @@ def remove_last_picked_point(plotter):
         removed_point = picked_points.pop()
         print(f"Last picked point removed: {removed_point}")
         plotter.clear()
-        plotter.add_mesh(mesh, pickable=True)
+        add_mesh(mesh)
         draw_plane(plotter, np.array(picked_points))
         plotter.add_mesh(pv.PolyData(np.array(picked_points)),
                          color="red", point_size=10)
@@ -147,9 +143,14 @@ def remove_last_picked_point(plotter):
         print("No points to remove.")
 
 
+def add_mesh(newMesh):
+    plotter.add_mesh(newMesh, pickable=True,
+                     show_edges=True)
+
+
 def after_render():
     plotter.add_text(
-        'x/y/z = align plane  to axis\ns = save\nr = reset all points\nb: remove the last clicked',
+        'x/y/z = align plane to this axis\nb: remove the last clicked\nr = reset all points\ns = save\n',
         position='lower_right',
         color='black',
         shadow=True,
@@ -158,13 +159,17 @@ def after_render():
     # plotter.add_camera_orientation_widget()
 
 
+# Laden des Meshes aus der Datei
+filename = 'input_mesh.ply'
+mesh = pv.read(filename)
+
 # Einrichten des Plotters
 plotter = pv.Plotter()
 plotter.show_axes()
-plotter.add_mesh(mesh, pickable=True)
+add_mesh(mesh)
 
 # plotter.show_bounds(  grid='front',  location='outer', all_edges=True)
-plotter.enable_point_picking(callback=on_pick)
+plotter.enable_point_picking(callback=on_pick, picker='volume')
 
 # Tastenkürzel für die Transformation auf die x-, y- und z-Achse
 plotter.add_key_event('x', lambda: align_and_transform(plotter, 'x'))

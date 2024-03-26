@@ -159,16 +159,24 @@ def confirm_axis_selection(plotter, axis):
 
 
 def reset_selection(plotter):
-    global picked_points, plane_points, axes_confirmed, current_axis_selection
+    global picked_points, mesh_transformed, plane_points, axes_confirmed, current_axis_selection
     picked_points = []
     plane_points = {'first': [], 'second': []}
     axes_confirmed = {'first': None, 'second': None}
     current_axis_selection = 'first'
-    plotter.clear()
-    add_mesh(mesh)
+
+    # Stelle sicher, dass das transformierte Mesh, falls vorhanden, zurückgesetzt wird
+    if mesh_transformed is not None:
+        mesh_transformed = None  # Setze mesh_transformed zurück
+        plotter.clear()  # Lösche alle vorherigen Meshes aus dem Plotter
+        add_mesh(mesh)  # Füge das ursprüngliche Mesh erneut hinzu
+    else:
+        plotter.clear()  # Lösche alle vorherigen Meshes aus dem Plotter
+        add_mesh(mesh)  # Füge das ursprüngliche Mesh erneut hinzu
+
     plotter.render()
     after_render()
-    print("Auswahl zurückgesetzt.")
+    print("Auswahl und Mesh wurden zurückgesetzt.")
 
 
 def remove_last_picked_point(plotter):

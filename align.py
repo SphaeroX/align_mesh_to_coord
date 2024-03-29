@@ -6,12 +6,14 @@ from sklearn.decomposition import PCA
 import tkinter as tk
 from tkinter import filedialog
 
+# Settings
+secound_align_repeatments = 10  # Anzahl der Wiederholungen für die zweite Achse
+
 # Globale Variablen
 picked_points = []
 mesh_transformed = None
 plane_points = {'first': [], 'second': []}
 current_axis_selection = 'first'  # 'first' oder 'second'
-# Speichert die bestätigten Achsen
 axes_confirmed = {'first': None, 'second': None}
 
 
@@ -42,14 +44,13 @@ def draw_plane(plotter, points, plane_name='plane', color='yellow'):
 
 
 def align_first_axis(plotter):
-    global mesh_transformed, plane_points, axes_confirmed, mesh
+    global mesh_transformed, plane_points, picked_points, axes_confirmed, mesh
 
     if axes_confirmed['first'] is None:
         print("Die erste Achse wurde nicht bestätigt.")
         return
 
-    # Berechne die Hauptnormale für die ausgewählte Punktemenge der ersten Achse
-    points = plane_points['first']
+    points = np.array(plane_points['first'])
     if len(points) >= 3:
         pca = PCA(n_components=3).fit(points)
         normal_first = pca.components_[-1]
@@ -58,7 +59,6 @@ def align_first_axis(plotter):
         print("Nicht genügend Punkte für die erste Achse.")
         return
 
-    # Zielnormale basierend auf der ausgewählten ersten Achse
     axis_vectors = {'x': np.array([1, 0, 0]), 'y': np.array(
         [0, 1, 0]), 'z': np.array([0, 0, 1])}
     target_normal_first = axis_vectors[axes_confirmed['first']]
@@ -66,18 +66,36 @@ def align_first_axis(plotter):
     # Berechne die Rotation
     rotation = R.align_vectors([target_normal_first], [normal_first])[0]
 
-    # Wende die Rotation auf das Mesh an
+    # Berechne die Verschiebung
+    translation = -center_first
+
+    # Wende die Rotation und Verschiebung auf das Mesh an
     if mesh_transformed is None:
         mesh_transformed = mesh.copy()
     mesh_transformed.points = rotation.apply(
-        mesh_transformed.points - center_first) + center_first
+        mesh_transformed.points + translation) + center_first
+
+    # Wende die gleiche Transformation auf die plane_points an
+    for key in plane_points:
+        if plane_points[key]:  # Prüfe, ob die Liste nicht leer ist
+            transformed_points = np.array(plane_points[key]) + translation
+            transformed_points = rotation.apply(
+                transformed_points) + center_first
+            plane_points[key] = transformed_points.tolist()
+
+    # Wende die gleiche Transformation auf die picked_points an
+    if picked_points:
+        transformed_picked_points = np.array(picked_points) + translation
+        transformed_picked_points = rotation.apply(
+            transformed_picked_points) + center_first
+        picked_points = transformed_picked_points.tolist()
 
     # Aktualisiere die Anzeige
     plotter.clear()
     add_mesh(mesh_transformed)
     plotter.render()
     after_render()
-    print("Mesh erfolgreich an der ersten Achse ausgerichtet.")
+    print("Mesh, plane_points und picked_points erfolgreich an der ersten Achse ausgerichtet.")
 
 
 def align_second_axis(plotter):
@@ -87,18 +105,16 @@ def align_second_axis(plotter):
         print("Die zweite Achse wurde nicht bestätigt.")
         return
 
-    # Annahme: Die erste Achse wurde bereits ausgerichtet
-    points = plane_points['second']
+    # Konvertiere die Liste in ein numpy Array für die Verarbeitung
+    points = np.array(plane_points['second'])
     if len(points) < 3:
         print("Nicht genügend Punkte für die zweite Achse.")
         return
 
-    # Die zweite Ausrichtung basiert auf der veränderten Position der Punkte nach der ersten Ausrichtung
     pca = PCA(n_components=3).fit(points)
     normal_second = pca.components_[-1]
     center_second = np.mean(points, axis=0)
 
-    # Zielnormale für die zweite Achse
     axis_vectors = {'x': np.array([1, 0, 0]), 'y': np.array(
         [0, 1, 0]), 'z': np.array([0, 0, 1])}
     target_normal_second = axis_vectors[axes_confirmed['second']]
@@ -106,16 +122,29 @@ def align_second_axis(plotter):
     # Berechne die Rotation
     rotation = R.align_vectors([target_normal_second], [normal_second])[0]
 
-    # Wende die Rotation an
+    # Berechne die Verschiebung
+    translation = -center_second
+
+    # Wende die Rotation und Verschiebung auf das Mesh an
     mesh_transformed.points = rotation.apply(
-        mesh_transformed.points - center_second) + center_second
+        mesh_transformed.points + translation) + center_second
+
+    # Wende die gleiche Transformation auf die plane_points an
+    for key in plane_points:
+        if plane_points[key]:  # Prüfe, ob die Liste nicht leer ist
+            transformed_points = np.array(
+                plane_points[key]) + translation  # Verschiebung anwenden
+            transformed_points = rotation.apply(
+                transformed_points) + center_second  # Rotation anwenden
+            # Konvertiere das Array zurück in eine Liste
+            plane_points[key] = transformed_points.tolist()
 
     # Aktualisiere die Anzeige
     plotter.clear()
     add_mesh(mesh_transformed)
     plotter.render()
     after_render()
-    print("Mesh erfolgreich an der zweiten Achse ausgerichtet.")
+    print("Mesh und plane_points erfolgreich an der zweiten Achse ausgerichtet.")
 
 
 def align_and_transform(plotter):
@@ -242,7 +271,10 @@ def confirm_axis_selection(plotter, axis):
     elif current_axis_selection == 'second' and axes_confirmed['first'] != axis:
         axes_confirmed['second'] = axis
         # Optionale Ausrichtung für die zweite Achse
-        align_second_axis(plotter)
+        for _ in range(secound_align_repeatments):
+            align_second_axis(plotter)
+            align_first_axis(plotter)
+
         reset_selection(plotter)
     else:
         print("Bitte wählen Sie eine andere Achse als die erste.")

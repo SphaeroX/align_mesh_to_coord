@@ -41,6 +41,83 @@ def draw_plane(plotter, points, plane_name='plane', color='yellow'):
                      name=plane_name, pickable=False)
 
 
+def align_first_axis(plotter):
+    global mesh_transformed, plane_points, axes_confirmed, mesh
+
+    if axes_confirmed['first'] is None:
+        print("Die erste Achse wurde nicht bestätigt.")
+        return
+
+    # Berechne die Hauptnormale für die ausgewählte Punktemenge der ersten Achse
+    points = plane_points['first']
+    if len(points) >= 3:
+        pca = PCA(n_components=3).fit(points)
+        normal_first = pca.components_[-1]
+        center_first = np.mean(points, axis=0)
+    else:
+        print("Nicht genügend Punkte für die erste Achse.")
+        return
+
+    # Zielnormale basierend auf der ausgewählten ersten Achse
+    axis_vectors = {'x': np.array([1, 0, 0]), 'y': np.array(
+        [0, 1, 0]), 'z': np.array([0, 0, 1])}
+    target_normal_first = axis_vectors[axes_confirmed['first']]
+
+    # Berechne die Rotation
+    rotation = R.align_vectors([target_normal_first], [normal_first])[0]
+
+    # Wende die Rotation auf das Mesh an
+    if mesh_transformed is None:
+        mesh_transformed = mesh.copy()
+    mesh_transformed.points = rotation.apply(
+        mesh_transformed.points - center_first) + center_first
+
+    # Aktualisiere die Anzeige
+    plotter.clear()
+    add_mesh(mesh_transformed)
+    plotter.render()
+    after_render()
+    print("Mesh erfolgreich an der ersten Achse ausgerichtet.")
+
+
+def align_second_axis(plotter):
+    global mesh_transformed, plane_points, axes_confirmed
+
+    if axes_confirmed['second'] is None:
+        print("Die zweite Achse wurde nicht bestätigt.")
+        return
+
+    # Annahme: Die erste Achse wurde bereits ausgerichtet
+    points = plane_points['second']
+    if len(points) < 3:
+        print("Nicht genügend Punkte für die zweite Achse.")
+        return
+
+    # Die zweite Ausrichtung basiert auf der veränderten Position der Punkte nach der ersten Ausrichtung
+    pca = PCA(n_components=3).fit(points)
+    normal_second = pca.components_[-1]
+    center_second = np.mean(points, axis=0)
+
+    # Zielnormale für die zweite Achse
+    axis_vectors = {'x': np.array([1, 0, 0]), 'y': np.array(
+        [0, 1, 0]), 'z': np.array([0, 0, 1])}
+    target_normal_second = axis_vectors[axes_confirmed['second']]
+
+    # Berechne die Rotation
+    rotation = R.align_vectors([target_normal_second], [normal_second])[0]
+
+    # Wende die Rotation an
+    mesh_transformed.points = rotation.apply(
+        mesh_transformed.points - center_second) + center_second
+
+    # Aktualisiere die Anzeige
+    plotter.clear()
+    add_mesh(mesh_transformed)
+    plotter.render()
+    after_render()
+    print("Mesh erfolgreich an der zweiten Achse ausgerichtet.")
+
+
 def align_and_transform(plotter):
     global mesh_transformed, plane_points, axes_confirmed, mesh
 
@@ -159,18 +236,15 @@ def confirm_axis_selection(plotter, axis):
     global axes_confirmed, current_axis_selection
     if current_axis_selection == 'first':
         axes_confirmed['first'] = axis
+        # Rufe die Ausrichtung für die erste Achse direkt hier auf
+        align_first_axis(plotter)
         current_axis_selection = 'second'  # Wechsle zur Auswahl der zweiten Achse
     elif current_axis_selection == 'second' and axes_confirmed['first'] != axis:
         axes_confirmed['second'] = axis
+        # Optionale Ausrichtung für die zweite Achse
+        align_second_axis(plotter)
     else:
         print("Bitte wählen Sie eine andere Achse als die erste.")
-        return
-
-    print(f"Achse {axis.upper()} für {current_axis_selection} bestätigt.")
-
-    # Nach der Bestätigung der zweiten Achse führe die Ausrichtung durch
-    if all(axes_confirmed.values()):
-        align_and_transform(plotter)
 
 
 def reset_selection(plotter):
@@ -180,14 +254,8 @@ def reset_selection(plotter):
     axes_confirmed = {'first': None, 'second': None}
     current_axis_selection = 'first'
 
-    # Stelle sicher, dass das transformierte Mesh, falls vorhanden, zurückgesetzt wird
-    if mesh_transformed is not None:
-        mesh_transformed = None  # Setze mesh_transformed zurück
-        plotter.clear()  # Lösche alle vorherigen Meshes aus dem Plotter
-        add_mesh(mesh)  # Füge das ursprüngliche Mesh erneut hinzu
-    else:
-        plotter.clear()  # Lösche alle vorherigen Meshes aus dem Plotter
-        add_mesh(mesh)  # Füge das ursprüngliche Mesh erneut hinzu
+    plotter.clear()  # Lösche alle vorherigen Meshes aus dem Plotter
+    add_mesh(mesh_transformed)  # Füge das ursprüngliche Mesh erneut hinzu
 
     plotter.render()
     after_render()

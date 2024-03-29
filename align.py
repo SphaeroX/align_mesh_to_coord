@@ -243,6 +243,7 @@ def confirm_axis_selection(plotter, axis):
         axes_confirmed['second'] = axis
         # Optionale Ausrichtung für die zweite Achse
         align_second_axis(plotter)
+        reset_selection(plotter)
     else:
         print("Bitte wählen Sie eine andere Achse als die erste.")
 

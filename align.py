@@ -299,8 +299,9 @@ def remove_last_picked_point(plotter):
     global picked_points, plane_points, current_axis_selection
     if picked_points:
         removed_point = picked_points.pop()
-        if removed_point in plane_points[current_axis_selection]:
-            plane_points[current_axis_selection].remove(removed_point)
+        removed_point_list = removed_point.tolist()
+        if removed_point_list in plane_points[current_axis_selection]:
+            plane_points[current_axis_selection].remove(removed_point_list)
         print(f"Letzter ausgewählter Punkt entfernt: {removed_point}")
         plotter.clear()
         add_mesh(mesh)

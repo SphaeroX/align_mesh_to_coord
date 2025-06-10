@@ -25,6 +25,7 @@ pip install numpy pyvista scipy scikit-learn
 5. Once the second axis is selected and confirmed, the mesh will be aligned according to these two axes.
 
 6. Press the `s` key to save the aligned mesh. It will be saved as `transformed_mesh.stl` in the same folder.
+7. Use the `r` key to reset the current selection or `b` to remove the last picked point.
 
 ## Screenshot
 

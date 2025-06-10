@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 # Settings
-secound_align_repeatments = 10  # Anzahl der Wiederholungen für die zweite Achse
+second_align_repetitions = 10  # Anzahl der Wiederholungen für die zweite Achse
 
 # Globale Variablen
 picked_points = []
@@ -179,7 +179,7 @@ def align_and_transform(plotter):
 
     # Wende die erste Rotation an und berechne die neue Normale der zweiten Ebene
     rotated_second_points = rotation1.apply(
-        plane_points['second'] - centers['first']) + centers['first']
+        np.array(plane_points['second']) - centers['first']) + centers['first']
     pca_second_rotated = PCA(n_components=3).fit(rotated_second_points)
     normal_second_rotated = pca_second_rotated.components_[-1]
 
@@ -271,7 +271,7 @@ def confirm_axis_selection(plotter, axis):
     elif current_axis_selection == 'second' and axes_confirmed['first'] != axis:
         axes_confirmed['second'] = axis
         # Optionale Ausrichtung für die zweite Achse
-        for _ in range(secound_align_repeatments):
+        for _ in range(second_align_repetitions):
             align_second_axis(plotter)
             align_first_axis(plotter)
 
@@ -341,30 +341,36 @@ def select_mesh_file():
     return file_path
 
 
-# Auswahl der Mesh-Datei
-filename = select_mesh_file()
-if filename:
-    mesh = pv.read(filename)
-else:
-    print("No file selected. The program will terminate.")
-    exit()
+def main():
+    global plotter, mesh
+    # Auswahl der Mesh-Datei
+    filename = select_mesh_file()
+    if filename:
+        mesh = pv.read(filename)
+    else:
+        print("No file selected. The program will terminate.")
+        exit()
 
-# Einrichten des Plotters
-plotter = pv.Plotter()
-plotter.show_axes()
-add_mesh(mesh)
-plotter.enable_point_picking(callback=on_pick, picker='volume')
+    # Einrichten des Plotters
+    plotter = pv.Plotter()
+    plotter.show_axes()
+    add_mesh(mesh)
+    plotter.enable_point_picking(callback=on_pick, picker='volume')
 
-# Tastenkürzel für die Bestätigung der Achsen
-plotter.add_key_event('x', lambda: confirm_axis_selection(plotter, 'x'))
-plotter.add_key_event('y', lambda: confirm_axis_selection(plotter, 'y'))
-plotter.add_key_event('z', lambda: confirm_axis_selection(plotter, 'z'))
+    # Tastenkürzel für die Bestätigung der Achsen
+    plotter.add_key_event('x', lambda: confirm_axis_selection(plotter, 'x'))
+    plotter.add_key_event('y', lambda: confirm_axis_selection(plotter, 'y'))
+    plotter.add_key_event('z', lambda: confirm_axis_selection(plotter, 'z'))
 
-# Tastenkürzel für andere Funktionen
-plotter.add_key_event('s', save_transformed)
-plotter.add_key_event('r', lambda: reset_selection(plotter))
-plotter.add_key_event('b', lambda: remove_last_picked_point(plotter))
+    # Tastenkürzel für andere Funktionen
+    plotter.add_key_event('s', save_transformed)
+    plotter.add_key_event('r', lambda: reset_selection(plotter))
+    plotter.add_key_event('b', lambda: remove_last_picked_point(plotter))
 
-# Starte die Visualisierung
-plotter.show()
-after_render()
+    # Starte die Visualisierung
+    plotter.show()
+    after_render()
+
+
+if __name__ == "__main__":
+    main()
